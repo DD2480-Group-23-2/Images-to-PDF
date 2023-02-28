@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -15,18 +16,29 @@ import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.afollestad.materialdialogs.MaterialDialog;
+import com.google.zxing.BinaryBitmap;
+import com.google.zxing.ChecksumException;
+import com.google.zxing.FormatException;
+import com.google.zxing.NotFoundException;
+import com.google.zxing.RGBLuminanceSource;
+import com.google.zxing.Result;
+import com.google.zxing.common.HybridBinarizer;
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+import com.google.zxing.qrcode.QRCodeReader;
 import com.itextpdf.text.DocumentException;
 import com.itextpdf.text.Font;
 
+//import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -76,6 +88,8 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
     private Font.FontFamily mFontFamily;
     private int mFontColor;
 
+    private static final int REQUEST_CODE_PICK_IMAGE = 10086;
+
     @BindView(R.id.scan_qrcode)
     MyCardView scanQrcode;
     @BindView(R.id.scan_barcode)
@@ -85,6 +99,16 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
     public View onCreateView(@NonNull LayoutInflater inflater, ViewGroup container,
                              Bundle savedInstanceState) {
         View rootview = inflater.inflate(R.layout.fragment_qrcode_barcode, container, false);
+
+        LinearLayout layout = (LinearLayout) rootview.findViewById(R.id.scan_qrcode_from_gallery);
+        layout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(Intent.ACTION_PICK);
+                intent.setType("image/*");
+                startActivityForResult(intent, REQUEST_CODE_PICK_IMAGE);
+            }
+        });
         // Initialize variables
         mSharedPreferences = PreferenceManager.getDefaultSharedPreferences(mActivity);
 
@@ -102,6 +126,39 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
 
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
+
+        if (requestCode == REQUEST_CODE_PICK_IMAGE && resultCode == Activity.RESULT_OK) {
+            // 获取图片URI
+            Uri uri = data.getData();
+
+            try {
+                // 从URI中读取Bitmap
+                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getActivity().getContentResolver(), uri);
+
+                // 将Bitmap转为二进制数组
+                int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
+                bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
+                RGBLuminanceSource source = new RGBLuminanceSource(bitmap.getWidth(), bitmap.getHeight(), pixels);
+                BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+                // 使用ZXing库扫描二维码
+                Result result = new QRCodeReader().decode(binaryBitmap);
+                String qrCodeContent = result.getText();
+
+                // 处理扫描结果
+                Toast.makeText(getActivity(), "Result: " + qrCodeContent, Toast.LENGTH_SHORT).show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            } catch (NotFoundException e) {
+                e.printStackTrace();
+                Toast.makeText(getActivity(), "Not found QR code", Toast.LENGTH_SHORT).show();
+            } catch (ChecksumException e) {
+                e.printStackTrace();
+            } catch (FormatException e) {
+                e.printStackTrace();
+            }
+        }
+
         IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if (result == null || result.getContents() == null)
             StringUtils.getInstance().showSnackbar(mActivity, R.string.scan_cancelled);
@@ -153,6 +210,13 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
                     }
                 }
                 break;
+//            case R.id.scan_qrcode_from_gallery:
+//                if (Build.VERSION.SDK_INT >= 23) {
+//                    Intent intent = new Intent(Intent.ACTION_PICK);
+//                    intent.setType("image/*");
+//                    startActivityForResult(intent, 1);
+//                }
+//                break;
         }
     }
 
@@ -168,6 +232,7 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
         integrator.setDesiredBarcodeFormats(scannerType);
         integrator.setPrompt(mActivity.getString(promptId));
         integrator.setCameraId(0);  // Use a specific camera of the device
+
         integrator.initiateScan();
     }
 
