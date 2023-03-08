@@ -124,39 +124,43 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
         return rootview;
     }
 
+    public void parseQRCode(Intent data) {
+        Uri uri = data.getData();
+        try {
+            // read Bitmap from URI
+            Bitmap bitmap = MediaStore.Images.Media.getBitmap(getActivity().getContentResolver(), uri);
+
+            // convert Bitmap into 2d-array
+            int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
+            bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
+            RGBLuminanceSource source = new RGBLuminanceSource(bitmap.getWidth(), bitmap.getHeight(), pixels);
+            BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(source));
+
+            // scan QR code by Zxing
+            Result result = new QRCodeReader().decode(binaryBitmap);
+            String qrCodeContent = result.getText();
+
+            // get decode result
+            Toast.makeText(getActivity(), "Result: " + qrCodeContent, Toast.LENGTH_SHORT).show();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (NotFoundException e) {
+            e.printStackTrace();
+            Toast.makeText(getActivity(), "Not found QR code", Toast.LENGTH_SHORT).show();
+        } catch (ChecksumException e) {
+            e.printStackTrace();
+        } catch (FormatException e) {
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void onActivityResult(int requestCode, int resultCode, Intent data) {
 
         if (requestCode == REQUEST_CODE_PICK_IMAGE && resultCode == Activity.RESULT_OK) {
-            // 获取图片URI
-            Uri uri = data.getData();
-
-            try {
-                // 从URI中读取Bitmap
-                Bitmap bitmap = MediaStore.Images.Media.getBitmap(getActivity().getContentResolver(), uri);
-
-                // 将Bitmap转为二进制数组
-                int[] pixels = new int[bitmap.getWidth() * bitmap.getHeight()];
-                bitmap.getPixels(pixels, 0, bitmap.getWidth(), 0, 0, bitmap.getWidth(), bitmap.getHeight());
-                RGBLuminanceSource source = new RGBLuminanceSource(bitmap.getWidth(), bitmap.getHeight(), pixels);
-                BinaryBitmap binaryBitmap = new BinaryBitmap(new HybridBinarizer(source));
-
-                // 使用ZXing库扫描二维码
-                Result result = new QRCodeReader().decode(binaryBitmap);
-                String qrCodeContent = result.getText();
-
-                // 处理扫描结果
-                Toast.makeText(getActivity(), "Result: " + qrCodeContent, Toast.LENGTH_SHORT).show();
-            } catch (IOException e) {
-                e.printStackTrace();
-            } catch (NotFoundException e) {
-                e.printStackTrace();
-                Toast.makeText(getActivity(), "Not found QR code", Toast.LENGTH_SHORT).show();
-            } catch (ChecksumException e) {
-                e.printStackTrace();
-            } catch (FormatException e) {
-                e.printStackTrace();
-            }
+            // get photo URI
+            parseQRCode(data);
         }
 
         IntentResult result = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
@@ -179,6 +183,7 @@ public class QrBarcodeScanFragment extends Fragment implements View.OnClickListe
             Uri uri = Uri.fromFile(mTempFile);
             resultToTextPdf(uri);
         }
+
     }
 
     @Override
